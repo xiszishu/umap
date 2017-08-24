@@ -72,6 +72,8 @@ class _umap {
         void remove_page_index(void* _p) { page_index.erase(_p); }
         void uffd_handler(void);
         void pagefault_event(const struct uffd_msg& msg);
+        void prefetchpage(void *addr);
+
         inline void stop_faultlistener( void ) noexcept {
             time_to_stop = true;
             listener->join();
@@ -287,7 +289,100 @@ void _umap::uffd_handler(void)
         }
  
         pagefault_event(msg);       // At this point, we know we have had a page fault.  Let's handle it.
+	if ((void *)msg.arg.pagefault.address==UMAP_PAGE_BEGIN((void *)msg.arg.pagefault.address))
+	prefetchpage((void *)msg.arg.pagefault.address+page_size);
+	//for (int i=0;i<31;i++)
+	//    uffd_loadpage((void *)msg.arg.pagefault.address+(i+1)*page_size);
     }
+}
+
+void _umap::prefetchpage(void *addr)
+{
+    void* page_begin = UMAP_PAGE_BEGIN(addr);
+
+    //
+    // Check to see if the faulting page is already in memory. This can
+    // happen if more than one thread causes a fault for the same page.
+    //
+    int bufidx = get_page_index(page_begin);
+
+    if (bufidx >= 0) {
+
+	// if (msg.arg.pagefault.flags & (UFFD_PAGEFAULT_FLAG_WP | UFFD_PAGEFAULT_FLAG_WRITE)) {
+	//     pages_in_memory[bufidx].mark_page_dirty();
+	//     disable_wp_on_pages((uint64_t)page_begin, 1);
+	// }
+
+	struct uffdio_range wake;
+	wake.start = (uint64_t)page_begin;
+	wake.len = page_size;
+
+	if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
+	    perror("ioctl(UFFDIO_WAKE)");
+	    exit(1);
+	}
+	return;
+    }
+
+    //
+    // Page not in memory, read it in and evict someone
+    //
+    int file_id=0;
+    off_t offset=(uint64_t)page_begin - (uint64_t)segment_address;
+    //find the file id and offset number
+    file_id=offset/bk_files[0].data_size;
+    offset%=bk_files[0].data_size;
+
+    if (pread(bk_files[file_id].fd, tmppagebuf, page_size, offset+bk_files[file_id].data_offset) == -1) {
+        perror("ERROR: pread failed");
+        exit(1);
+    }
+
+    if (pages_in_memory[next_page_alloc_index].get_page()) {
+        delete_page_index(pages_in_memory[next_page_alloc_index].get_page());
+        evict_page(pages_in_memory[next_page_alloc_index]);
+    }
+    pages_in_memory[next_page_alloc_index].set_page(page_begin);
+    add_page_index(next_page_alloc_index, page_begin);
+
+    struct uffdio_copy copy;
+    copy.src = (uint64_t)tmppagebuf;
+    copy.dst = (uint64_t)page_begin;
+    copy.len = page_size;
+
+    pages_in_memory[next_page_alloc_index].mark_page_clean();
+
+    copy.mode = UFFDIO_COPY_MODE_DONTWAKE;
+    if (ioctl(userfault_fd, UFFDIO_COPY, &copy) == -1) {
+	perror("ERROR: ioctl(UFFDIO_COPY nowake)");
+	exit(1);
+    }
+
+    umapdbg("PF(READ)     (UFFDIO_COPY)       @(%p)=%lu\n", page_begin, *(uint64_t*)page_begin);
+
+    enable_wp_on_pages_and_wake((uint64_t)page_begin, 1);
+
+    //
+    // There is a very small window between UFFDIO_COPY_MODE and enable_wp_on_pages_and_wake where
+    // a write may occur before we re-enable WP (the UFFDIO_COPY appears to clear any previously 
+    // set WP settings.
+    //
+    if (memcmp(tmppagebuf, page_begin, page_size)) {
+	pages_in_memory[next_page_alloc_index].mark_page_dirty();
+	disable_wp_on_pages((uint64_t)page_begin, 1);
+	umapdbg("PF(READ) %p changed after UFFDIO_COPY\n", page_begin);
+    }
+
+    struct uffdio_range wake;
+    wake.start = (uint64_t)page_begin;
+    wake.len = page_size;
+
+    if (ioctl(userfault_fd, UFFDIO_WAKE, &wake) == -1) {
+	perror("ERROR: ioctl(UFFDIO_WAKE)");
+	exit(1);
+    }
+
+    next_page_alloc_index = (next_page_alloc_index +1) % page_buffer_size;    
 }
 
 void _umap::pagefault_event(const struct uffd_msg& msg)
