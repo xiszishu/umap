@@ -14,6 +14,8 @@ if(OPENMP_FOUND)
     add_executable(multiple multiple.cpp)
     add_executable(simple simple_loader.cpp)
     add_executable(private multi_private.cpp)
+    add_executable(direct multi_private_direct.cpp)
+    add_executable(simple_direct simple_loader_direct.cpp)
     
     target_link_libraries(multiple libumap_static)
     target_link_libraries(multiple libumaptest_static)
@@ -21,14 +23,21 @@ if(OPENMP_FOUND)
 
     target_link_libraries(simple libumaptest_static)
     target_link_libraries(simple qfits)
+    
+    target_link_libraries(simple_direct libumaptest_static)
+    target_link_libraries(simple_direct qfits)
 
     target_link_libraries(private libumap_static)
     target_link_libraries(private libumaptest_static)
     target_link_libraries(private qfits)
 
+    target_link_libraries(direct libumap_static)
+    target_link_libraries(direct libumaptest_static)
+    target_link_libraries(direct qfits)
+
     include_directories( ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/include )
 
-    install(TARGETS multiple simple private
+    install(TARGETS multiple simple simple_direct private direct
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib/static
             RUNTIME DESTINATION bin )
