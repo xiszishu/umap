@@ -40,6 +40,12 @@ extern "C" {
   void umt_closeandunmap_fits(const umt_optstruct_t*, uint64_t, void*,void*);
   void* umt_openandmap_fits2(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
   void umt_closeandunmap_fits2(const umt_optstruct_t*, uint64_t, void**,void*);
+  void* umt_openandmap_direct(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_direct(const umt_optstruct_t*, uint64_t, void**,void*);
+  void* umt_openandmap_fits2p(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_fits2p(const umt_optstruct_t*, uint64_t, void**,void*);
+  void* umt_openandmap_fits4p(const umt_optstruct_t*, uint64_t, void**,off_t,off_t);
+  void umt_closeandunmap_fits4p(const umt_optstruct_t*, uint64_t, void**,void*);
 #ifdef __cplusplus
 }
 #endif

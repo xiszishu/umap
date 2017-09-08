@@ -318,3 +318,297 @@ void umt_closeandunmap_fits2(const umt_optstruct_t* testops, uint64_t numbytes, 
   close(fits_files[i].fd);
   free(fits_files);
 }
+//--------------direct--------------------
+void* umt_openandmap_direct(const umt_optstruct_t* testops, uint64_t numbytes, void** region,off_t offset,off_t data_size)
+{
+  umap_backing_file* fits_files;
+  char* filename;
+  char num[5];
+  int open_options = O_RDWR;
+
+  if (testops->iodirect) 
+    open_options |= O_DIRECT;
+
+  if ( !testops->noinit )
+    open_options |= O_CREAT;
+
+#ifdef O_LARGEFILE
+    open_options |= O_LARGEFILE;
+#endif
+
+  if (testops->fnum==-1)
+  {
+      perror("number of files not in input");
+      exit(-1);
+  }
+  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
+  filename=(char *)std::malloc(sizeof(char)*100);
+
+  for (int i=0;i<testops->fnum;i++)
+  {
+        strcpy(filename,testops->fn);
+	sprintf(num,"%d",i+1);
+	strcat(filename,num);
+	struct stat f1;
+	stat(filename, &f1);
+	//printf("name size:%lu\n",f1.st_size);
+	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
+	//printf("processing %s, %d\n",filename,fits_files[i].fd);
+
+	if(fits_files[i].fd == -1) 
+	{
+	    perror("open");
+	    exit(-1);
+	}
+  }
+
+  struct stat sbuf;
+  if (testops->noinit) {
+    // If we are not initializing file, make sure that it is big enough
+    for (int i=0;i<testops->fnum;i++){
+      if (fstat(fits_files[i].fd, &sbuf) == -1){
+        perror("fstat");
+        exit(-1);
+      }
+      //printf("size:%d\n",sbuf.st_size);
+    }
+  }
+
+    int prot = PROT_READ|PROT_WRITE;
+    int flags = UMAP_PRIVATE;
+
+    for (int i=0;i<testops->fnum;i++)
+    {
+      region[i] = umap(NULL, numbytes, prot, flags, fits_files[i].fd, 0);
+      if (region[i] == UMAP_FAILED) 
+      {
+	perror("umap");
+	exit(-1);
+      }
+    }
+
+    return (void *)fits_files;
+}
+
+void umt_closeandunmap_direct(const umt_optstruct_t* testops, uint64_t numbytes, void** region,void* p)
+{
+  if ( testops->usemmap ) {
+    if (munmap(region, numbytes) < 0) {
+      perror("munmap");
+      exit(-1);
+    }
+  }
+  else {
+    for (int i=0;i<testops->fnum;i++)
+    if (uunmap(region[i], numbytes) < 0) {
+      perror("uunmap");
+      exit(-1);
+    }
+  }
+  umap_backing_file *fits_files=(umap_backing_file *)p;
+  for (int i=0;i<testops->fnum;i++)
+  close(fits_files[i].fd);
+  free(fits_files);
+}
+//---------------handler per 2 files------------
+void* umt_openandmap_fits2p(const umt_optstruct_t* testops, uint64_t numbytes, void** region,off_t offset,off_t data_size)
+{
+  char* filename;
+  char num[5];
+  int open_options = O_RDWR;
+
+  umap_backing_file *fits_files;
+  if (testops->iodirect) 
+    open_options |= O_DIRECT;
+
+  if ( !testops->noinit )
+    open_options |= O_CREAT;
+
+#ifdef O_LARGEFILE
+    open_options |= O_LARGEFILE;
+#endif
+
+  if (testops->fnum==-1)
+  {
+      perror("number of files not in input");
+      exit(-1);
+  }
+  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
+  filename=(char *)std::malloc(sizeof(char)*100);
+
+  for (int i=0;i<testops->fnum;i++)
+  {
+        strcpy(filename,testops->fn);
+	sprintf(num,"%d",i+1);
+	strcat(filename,num);
+	//strcat(filename,".fits");
+
+	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
+	//printf("processing %s, %d\n",filename,fdlist[i]);
+
+	if(fits_files[i].fd == -1) 
+	{
+	    perror("open");
+	    exit(-1);
+	}
+	fits_files[i].data_size=data_size;
+	fits_files[i].data_offset=offset;
+  }
+
+  // if (testops->noinit) {
+  //   // If we are not initializing file, make sure that it is big enough
+  //   struct stat sbuf;
+  //   uint64_t totalsize=0;
+  //   for (int i=0;i<testops->fnum;i++){
+  // 	if (fstat(fits_files[i].fd, &sbuf) == -1){
+  //       perror("fstat");
+  //       exit(-1);
+  //     }
+  //     //printf("size:%d\n",sbuf.st_size);
+  //     totalsize+=(uint64_t)sbuf.st_size;
+  //   }
+
+  //   if (totalsize < numbytes) {
+  //      cerr << testops->fn 
+  //       << " file is not large enough.  "  << sbuf.st_size 
+  //       << " < size requested " << numbytes << endl;
+  //     exit(-1);
+  //   }
+  // }
+
+    int prot = PROT_READ|PROT_WRITE;
+    int flags = UMAP_PRIVATE;
+
+    for (int i=0;i<testops->fnum;i+=2)
+    {
+        region[i] = umap_mf(NULL, numbytes*2, prot, flags, 2, fits_files+i);
+	if (region[i] == UMAP_FAILED) {
+	    perror("umap");
+	    exit(-1);
+	}
+    }
+
+    return (void *)fits_files;
+}
+
+void umt_closeandunmap_fits2p(const umt_optstruct_t* testops, uint64_t numbytes, void** region,void* p)
+{
+  if ( testops->usemmap ) {
+    if (munmap(region, numbytes) < 0) {
+      perror("munmap");
+      exit(-1);
+    }
+  }
+  else {
+      for (int i=0;i<testops->fnum;i+=2)
+    if (uunmap(region[i], numbytes*2) < 0) {
+      perror("uunmap");
+      exit(-1);
+    }
+  }
+  umap_backing_file *fits_files=(umap_backing_file *)p;
+  for (int i=0;i<testops->fnum;i++)
+  close(fits_files[i].fd);
+  free(fits_files);
+}
+//------------------------------------
+void* umt_openandmap_fits4p(const umt_optstruct_t* testops, uint64_t numbytes, void** region,off_t offset,off_t data_size)
+{
+  char* filename;
+  char num[5];
+  int open_options = O_RDWR;
+
+  umap_backing_file *fits_files;
+  if (testops->iodirect) 
+    open_options |= O_DIRECT;
+
+  if ( !testops->noinit )
+    open_options |= O_CREAT;
+
+#ifdef O_LARGEFILE
+    open_options |= O_LARGEFILE;
+#endif
+
+  if (testops->fnum==-1)
+  {
+      perror("number of files not in input");
+      exit(-1);
+  }
+  fits_files=(umap_backing_file *)calloc(testops->fnum,sizeof(umap_backing_file));
+  filename=(char *)std::malloc(sizeof(char)*100);
+
+  for (int i=0;i<testops->fnum;i++)
+  {
+        strcpy(filename,testops->fn);
+	sprintf(num,"%d",i+1);
+	strcat(filename,num);
+	//strcat(filename,".fits");
+
+	fits_files[i].fd = open(filename, open_options, S_IRUSR|S_IWUSR);
+	//printf("processing %s, %d\n",filename,fdlist[i]);
+
+	if(fits_files[i].fd == -1) 
+	{
+	    perror("open");
+	    exit(-1);
+	}
+	fits_files[i].data_size=data_size;
+	fits_files[i].data_offset=offset;
+  }
+
+  // if (testops->noinit) {
+  //   // If we are not initializing file, make sure that it is big enough
+  //   struct stat sbuf;
+  //   uint64_t totalsize=0;
+  //   for (int i=0;i<testops->fnum;i++){
+  // 	if (fstat(fits_files[i].fd, &sbuf) == -1){
+  //       perror("fstat");
+  //       exit(-1);
+  //     }
+  //     //printf("size:%d\n",sbuf.st_size);
+  //     totalsize+=(uint64_t)sbuf.st_size;
+  //   }
+
+  //   if (totalsize < numbytes) {
+  //      cerr << testops->fn 
+  //       << " file is not large enough.  "  << sbuf.st_size 
+  //       << " < size requested " << numbytes << endl;
+  //     exit(-1);
+  //   }
+  // }
+
+    int prot = PROT_READ|PROT_WRITE;
+    int flags = UMAP_PRIVATE;
+
+    for (int i=0;i<testops->fnum;i+=10)
+    {
+        region[i] = umap_mf(NULL, numbytes*10, prot, flags, 10, fits_files+i);
+	if (region[i] == UMAP_FAILED) {
+	    perror("umap");
+	    exit(-1);
+	}
+    }
+
+    return (void *)fits_files;
+}
+
+void umt_closeandunmap_fits4p(const umt_optstruct_t* testops, uint64_t numbytes, void** region,void* p)
+{
+  if ( testops->usemmap ) {
+    if (munmap(region, numbytes) < 0) {
+      perror("munmap");
+      exit(-1);
+    }
+  }
+  else {
+      for (int i=0;i<testops->fnum;i+=10)
+    if (uunmap(region[i], numbytes*10) < 0) {
+      perror("uunmap");
+      exit(-1);
+    }
+  }
+  umap_backing_file *fits_files=(umap_backing_file *)p;
+  for (int i=0;i<testops->fnum;i++)
+  close(fits_files[i].fd);
+  free(fits_files);
+}
