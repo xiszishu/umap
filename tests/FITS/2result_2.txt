@@ -1,0 +1,4 @@
+/mnt/intel/xiao/asteroid_sim_epoch1.fits
+thread num:8
+region start:0x7fff9b72c7f0
+Median Calculation 1884.563619 s

@@ -170,9 +170,11 @@ void median_calc(int n,struct patch *list,double *cube_median,float **d)
 	#pragma omp parallel for
         for (uint64_t i=list[k].sy; i<list[k].ey; i++) // bounding box
 	{
+	    //int tid=omp_get_thread_num();
             for (uint64_t j=list[k].sx; j<list[k].ex; j++)
 	    {
 	        //printf("i,j:%d %d\n",i,j);
+		//printf("%d\n",tid);
  	        cube_median[i*lx+j]=torben(d,options.fnum,i*lx+j);
 	    }
         }

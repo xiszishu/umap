@@ -1,0 +1,2 @@
+/mnt/intel/xiao/asteroid_sim_epoch1.fits
+Median Calculation 2667.495647 s

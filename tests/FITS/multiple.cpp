@@ -115,15 +115,20 @@ double torben(float *m, int n,uint64_t step)
       {
 	float m_swaped;
 	swapbyte(m+j,&m_swaped);
-	if (m_swaped<guess)
-	{
-	  less++;
-	  if (m_swaped>maxltguess) maxltguess = m_swaped;
-	} else if (m_swaped>guess)
-	{
-	  greater++;
-	  if (m_swaped<mingtguess) mingtguess = m_swaped;
-	} else equal++;
+	if (fequal((double)m_swaped,guess))
+        {
+            equal++;
+            //printf("%6.5lf, %6.5lf\n",m_swaped,guess);                            
+        }
+        else if (m_swaped<guess)
+        {
+	    less++;
+	    if (m_swaped>maxltguess) maxltguess = m_swaped;
+        } else {
+	    greater++;
+	    //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);                         
+	    if (m_swaped<mingtguess) mingtguess = m_swaped;
+        }
       }
     if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
     else if (less>greater) max = maxltguess ;

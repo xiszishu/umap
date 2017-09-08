@@ -88,55 +88,57 @@ double torben(float **m, int n,int pos)
 
   swapbyte(m[0]+pos,&num);
   min = max = num;
-  //fprintf(stdout,"m:%6.5lf\n",num);
+  // //fprintf(stdout,"m:%6.5lf\n",num);
 
   for (i=1 ; i<n ; i++) 
   {
       swapbyte(m[i]+pos,&num);
-      if (num<min) min=num;
-      if (num>max) max=num;
+      min+=num;
+      //if (num<min) min=num;
+      //if (num>max) max=num;
       //fprintf(stdout,"m:%6.5lf\n",num);
   }
-  //fprintf(stdout,"Max:%6.5lf\nMin:%6.5lf\n",max,min);
+  // //fprintf(stdout,"Max:%6.5lf\nMin:%6.5lf\n",max,min);
 
-  while (1) {
-    guess = (min+max)/2;
-    less = 0; greater = 0; equal = 0;
-    maxltguess = min ;
-    mingtguess = max ;
-    for (j=0; j<n;j++)
-      {
-	float m_swaped;
-	//fprintf(stdout,"j:%d\n",j);
-	swapbyte(m[j]+pos,&m_swaped);
-	if (fequal((double)m_swaped,guess))
-	{
-	    equal++;
-	    //printf("%6.5lf, %6.5lf\n",m_swaped,guess);
-        }
-	else if (m_swaped<guess)
-	{
-	  less++;
-	  if (m_swaped>maxltguess) maxltguess = m_swaped;
-	} else {
-	  greater++;
-	  //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);
-	  if (m_swaped<mingtguess) mingtguess = m_swaped;
-	}
-      }
-    if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
-    else if (less>greater) max = maxltguess ;
-    else min = mingtguess;
-  }
-  //fprintf(stdout,"guess: %6.5lf less:%d greater:%d equal:%d all:%d\n",guess,less,greater,equal,(n+1)/2);
-  int half=(n+1)/2;
-  if (less>=half) min=maxltguess;
-  else min=mingtguess;
-  if (n&1) return min;
-  if (greater >= half) max = mingtguess;
-  else if (greater+equal >= half) max = guess;
-  else max = maxltguess;
-  return (min+max)/(double)2;
+  // while (1) {
+  //   guess = (min+max)/2;
+  //   less = 0; greater = 0; equal = 0;
+  //   maxltguess = min ;
+  //   mingtguess = max ;
+  //   for (j=0; j<n;j++)
+  //     {
+  // 	float m_swaped;
+  // 	//fprintf(stdout,"j:%d\n",j);
+  // 	swapbyte(m[j]+pos,&m_swaped);
+  // 	if (fequal((double)m_swaped,guess))
+  // 	{
+  // 	    equal++;
+  // 	    //printf("%6.5lf, %6.5lf\n",m_swaped,guess);
+  //       }
+  // 	else if (m_swaped<guess)
+  // 	{
+  // 	  less++;
+  // 	  if (m_swaped>maxltguess) maxltguess = m_swaped;
+  // 	} else {
+  // 	  greater++;
+  // 	  //printf("%6.5lf, %6.5lf\n",m_swaped,mingtguess);
+  // 	  if (m_swaped<mingtguess) mingtguess = m_swaped;
+  // 	}
+  //     }
+  //   if (less <= (n+1)/2 && greater <= (n+1)/2) break ;
+  //   else if (less>greater) max = maxltguess ;
+  //   else min = mingtguess;
+  // }
+  // //fprintf(stdout,"guess: %6.5lf less:%d greater:%d equal:%d all:%d\n",guess,less,greater,equal,(n+1)/2);
+  // int half=(n+1)/2;
+  // if (less>=half) min=maxltguess;
+  // else min=mingtguess;
+  // if (n&1) return min;
+  // if (greater >= half) max = mingtguess;
+  // else if (greater+equal >= half) max = guess;
+  // else max = maxltguess;
+  // return (min+max)/(double)2;
+  return min;
 }
 void displaycube(double *cube,struct patch *list,int n)
 {
@@ -188,13 +190,9 @@ static int process(const char * filename)
 	sprintf(num,"%d",i+1);
 	strcat(nfilename,num);
 	//strcat(nfilename,".fits");
-	
-	fdlist[i] = open(nfilename, O_RDWR|O_DIRECT);
-	
-	printf("FD:%d processing %s\n",fdlist[i],nfilename);
-	struct stat fs;
-	stat(nfilename,&fs);
-	printf("size:%lu\n",fs.st_size);
+	printf("processing %s\n",nfilename);
+	fdlist[i] = open(nfilename, O_RDWR);
+
 	if(fdlist[i] == -1) 
 	{
 	    perror("open");
@@ -208,9 +206,53 @@ static int process(const char * filename)
     int                psize;
     struct stat        fileinfo ;
     int segsize;
-    
-    lx=32768;
-    ly=32768;
+
+    //printf("processing %s\n",filename);
+
+    if (stat(nfilename, &fileinfo)!=0) {
+        return -1 ;
+    }
+    // if (fileinfo.st_size<1) {
+    //     printf("cannot stat file\n");
+    //     return -1 ;
+    // }
+
+    // /* Retrieve image attributes */
+    // if (qfits_is_fits(nfilename)!=1) {
+    //     printf("not a FITS file\n");
+    //     return -1 ;
+    // }
+
+    // sval = qfits_query_hdr(nfilename, "NAXIS1");
+    // if (sval==NULL) {
+    //     printf("cannot read NAXIS1\n");
+    //     return -1 ;
+    // }
+    // lx = atoi(sval);
+    // sval = qfits_query_hdr(nfilename, "NAXIS2");
+    // if (sval==NULL) {
+    //     printf("cannot read NAXIS2\n");
+    //     return -1 ;
+    // }
+    // ly = atoi(sval);
+    // sval = qfits_query_hdr(nfilename, "BITPIX");
+    // if (sval==NULL) {
+    //     printf("cannot read BITPIX\n");
+    //     return -1 ;
+    // }
+    // bpp = atoi(sval);
+
+    // psize = bpp/8 ;
+    // //printf("psize: %d uint32: %d\n",psize,sizeof(uint32_t));
+    // if (psize<0) psize=-psize ;
+
+    // /* Retrieve start of first data section */
+    // if (qfits_get_datinfo(nfilename, 0, &dstart, &segsize)!=0) {
+    //     printf("reading header information\n");
+    //     return -1 ;
+    // }
+
+    lx=ly=32768;
     psize=4;
     dstart=0;
     omp_set_num_threads(options.numthreads);
@@ -222,7 +264,6 @@ static int process(const char * filename)
     int frame=dstart+lx*ly*psize;
     //printf("frame size:%d\n",frame);
     char *f1[100];
-    fstat(fdlist[0],&fileinfo);
     for (int i=0;i<options.fnum;i++)
     {
         f1[i] = (char*)mmap(0,fileinfo.st_size,PROT_READ | PROT_WRITE,MAP_SHARED,fdlist[i],0);
@@ -266,7 +307,7 @@ static int process(const char * filename)
     free(list);
     for (i=0;i<options.fnum;i++)
     {
-        if (munmap(f1[i], frame)!=0) 
+        if (munmap(f1[i], fileinfo.st_size)!=0) 
         {
 	    printf("unmapping file %d\n",i);
             return -1 ;
